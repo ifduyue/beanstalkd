@@ -272,6 +272,7 @@ struct Conn {
     int    rw;          // currently want: 'r', 'w', or 'h'
     int    pending_timeout;
     char   halfclosed;
+    char   authenticated;
 
     char cmd[LINE_BUF_SIZE]; // this string is NOT NUL-terminated
     int  cmd_len;
@@ -374,6 +375,7 @@ struct Server {
     char *port;
     char *addr;
     char *user;
+    char *passwd;
 
     Wal    wal;
     Socket sock;

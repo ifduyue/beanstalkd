@@ -111,6 +111,7 @@ usage(int code)
             "            (will be rounded up to a multiple of 512 bytes)\n"
             " -c       compact the binlog (default)\n"
             " -n       do not compact the binlog\n"
+            " -a       connection password\n"
             " -v       show version information\n"
             " -V       increase verbosity\n"
             " -h       show this help\n",
@@ -187,6 +188,9 @@ optparse(Server *s, char **argv)
                 case 'b':
                     s->wal.dir = EARGF(flagusage("-b"));
                     s->wal.use = 1;
+                    break;
+                case 'a':
+                    s->passwd = EARGF(flagusage("-a"));
                     break;
                 case 'h':
                     usage(0);

@@ -7,6 +7,7 @@ struct Server srv = {
     Portdef,
     NULL,
     NULL,
+    NULL,
     {
         Filesizedef,
     },

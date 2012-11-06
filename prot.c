@@ -46,6 +46,7 @@ size_t job_data_size_limit = JOB_DATA_SIZE_LIMIT_DEFAULT;
 #define CMD_STATS_TUBE "stats-tube "
 #define CMD_QUIT "quit"
 #define CMD_PAUSE_TUBE "pause-tube"
+#define CMD_AUTH "auth "
 
 #define CONSTSTRLEN(m) (sizeof(m) - 1)
 
@@ -85,6 +86,8 @@ size_t job_data_size_limit = JOB_DATA_SIZE_LIMIT_DEFAULT;
 #define MSG_BURIED_FMT "BURIED %"PRIu64"\r\n"
 #define MSG_INSERTED_FMT "INSERTED %"PRIu64"\r\n"
 #define MSG_NOT_IGNORED "NOT_IGNORED\r\n"
+#define MSG_AUTHENTICATED "AUTHENTICATED\r\n"
+#define MSG_NOT_AUTHENTICATED "NOT_AUTHENTICATED\r\n"
 
 #define MSG_NOTFOUND_LEN CONSTSTRLEN(MSG_NOTFOUND)
 #define MSG_DELETED_LEN CONSTSTRLEN(MSG_DELETED)
@@ -134,7 +137,8 @@ size_t job_data_size_limit = JOB_DATA_SIZE_LIMIT_DEFAULT;
 #define OP_QUIT 22
 #define OP_PAUSE_TUBE 23
 #define OP_JOBKICK 24
-#define TOTAL_OPS 25
+#define OP_AUTH 25
+#define TOTAL_OPS 26
 
 #define STATS_FMT "---\n" \
     "current-jobs-urgent: %u\n" \
@@ -750,6 +754,8 @@ which_cmd(Conn *c)
     TEST_CMD(c->cmd, CMD_LIST_TUBES, OP_LIST_TUBES);
     TEST_CMD(c->cmd, CMD_QUIT, OP_QUIT);
     TEST_CMD(c->cmd, CMD_PAUSE_TUBE, OP_PAUSE_TUBE);
+    TEST_CMD(c->cmd, CMD_AUTH, OP_AUTH);
+    
     return OP_UNKNOWN;
 }
 
@@ -1181,18 +1187,31 @@ dispatch_cmd(Conn *c)
 
     /* NUL-terminate this string so we can use strtol and friends */
     c->cmd[c->cmd_len - 2] = '\0';
-
+    
     /* check for possible maliciousness */
     if (strlen(c->cmd) != c->cmd_len - 2) {
         return reply_msg(c, MSG_BAD_FORMAT);
     }
 
     type = which_cmd(c);
+    
     if (verbose >= 2) {
         printf("<%d command %s\n", c->sock.fd, op_names[type]);
     }
+    
+    if (srv.passwd && !c->authenticated && type != OP_AUTH) {
+        c->cmd_len = 0;
+        c->cmd_read = 0;
+        return reply_msg(c, MSG_NOT_AUTHENTICATED);
+    }
 
     switch (type) {
+    case OP_AUTH:
+        if (!strcmp(c->cmd + 5, srv.passwd)) {
+            c->authenticated = 1;
+            return reply_msg(c, MSG_AUTHENTICATED);
+        }
+        return reply_msg(c, MSG_NOT_AUTHENTICATED);
     case OP_PUT:
         r = read_pri(&pri, c->cmd + 4, &delay_buf);
         if (r) return reply_msg(c, MSG_BAD_FORMAT);
@@ -1898,7 +1917,7 @@ h_accept(const int fd, const short which, Server *s)
         update_conns();
         return;
     }
-
+    
     c = make_conn(cfd, STATE_WANTCOMMAND, default_tube, default_tube);
     if (!c) {
         twarnx("make_conn() failed");
